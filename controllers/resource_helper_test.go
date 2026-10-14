@@ -43,10 +43,25 @@ func newDefaultStartupProbe(port int32) *corev1.Probe {
 			},
 		},
 		InitialDelaySeconds: startupProbeInitialDelaySeconds,
+		PeriodSeconds:       startupProbePeriodSeconds,
 		TimeoutSeconds:      startupProbeTimeoutSeconds,
 		FailureThreshold:    startupProbeFailureThreshold,
 		SuccessThreshold:    startupProbeSuccessThreshold,
 	}
+}
+
+// Cupola: the startup probe's values themselves (the helper above builds the
+// expectation from the same constants, so it would not notice them change).
+func TestStartupProbeValues(t *testing.T) {
+	p := getStartupProbe(&ogxiov1beta1.OGXServer{})
+	assert.Equal(t, int32(2), p.InitialDelaySeconds, "first probe 2 s after start")
+	assert.Equal(t, int32(2), p.PeriodSeconds, "probe every 2 s")
+	assert.Equal(t, int32(5), p.TimeoutSeconds, "one probe times out after 5 s")
+	assert.Equal(t, int32(60), p.FailureThreshold, "60 failures before a restart")
+	assert.Equal(t, int32(1), p.SuccessThreshold)
+	assert.Equal(t, "/v1/health", p.HTTPGet.Path)
+	budget := p.InitialDelaySeconds + p.FailureThreshold*p.PeriodSeconds
+	assert.Equal(t, int32(122), budget, "seconds a slow start may take before the pod is restarted")
 }
 
 func TestBuildContainerSpec(t *testing.T) {

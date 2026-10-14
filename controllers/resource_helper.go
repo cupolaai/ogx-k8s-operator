@@ -74,10 +74,17 @@ func resolveRuntimeConfigRef(instance *ogxiov1beta1.OGXServer, pendingGeneratedC
 }
 
 // Probes configuration.
+//
+// Cupola: the server listens in ~7 s, but the upstream probe (first check at
+// 15 s, every 10 s, 3 failures) made it Ready no sooner than 15 s and gave a
+// slow start only ~45 s before the pod was killed. Probe often from the start
+// and allow a long start: Ready about 2 s after the server listens, and up to
+// 2 + 60 x 2 = 122 s for a cold node, an image pull or startup maintenance.
 const (
-	startupProbeInitialDelaySeconds = 15 // Time to wait before the first probe
-	startupProbeTimeoutSeconds      = 30 // When the probe times out
-	startupProbeFailureThreshold    = 3  // Pod is marked Unhealthy after 3 consecutive failures
+	startupProbeInitialDelaySeconds = 2  // Time to wait before the first probe
+	startupProbePeriodSeconds       = 2  // How often to probe until the server answers
+	startupProbeTimeoutSeconds      = 5  // When one probe times out
+	startupProbeFailureThreshold    = 60 // Pod is restarted after 60 consecutive failures (~122 s)
 	startupProbeSuccessThreshold    = 1  // Pod is marked Ready after 1 successful probe
 )
 
@@ -148,6 +155,7 @@ func getStartupProbe(instance *ogxiov1beta1.OGXServer) *corev1.Probe {
 	return &corev1.Probe{
 		ProbeHandler:        getHealthProbe(instance),
 		InitialDelaySeconds: startupProbeInitialDelaySeconds,
+		PeriodSeconds:       startupProbePeriodSeconds,
 		TimeoutSeconds:      startupProbeTimeoutSeconds,
 		FailureThreshold:    startupProbeFailureThreshold,
 		SuccessThreshold:    startupProbeSuccessThreshold,
